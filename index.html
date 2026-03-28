@@ -29,9 +29,16 @@
           <button id="nextSegmentButton" class="ghost-button" type="button">下一条 ]</button>
           <label class="toggle-chip" for="subtitleVisibleInput">
             <input id="subtitleVisibleInput" type="checkbox">
-            <span>显示视频字幕</span>
+            <span>显示字幕</span>
           </label>
           <a id="downloadVttLink" class="ghost-button ghost-link is-disabled" aria-disabled="true">下载 VTT</a>
+          <button
+            id="toggleRepeatButton"
+            class="ghost-button"
+            type="button"
+            aria-controls="repeatPanel"
+            aria-expanded="false"
+          >重复</button>
           <button
             id="openLibraryButton"
             class="ghost-button"
@@ -43,6 +50,19 @@
         </div>
 
         <p class="shortcut-hint">快捷键：`[` 跳上一条，`]` 跳下一条</p>
+
+        <section id="repeatPanel" class="repeat-panel" hidden>
+          <div class="repeat-panel-copy">
+            <p class="eyebrow">A-B Repeat</p>
+            <p id="repeatSummary" class="repeat-summary">未设置 A 点和 B 点</p>
+          </div>
+
+          <div class="repeat-actions">
+            <button id="setRepeatStartButton" class="ghost-button" type="button">设 A 点</button>
+            <button id="setRepeatEndButton" class="ghost-button" type="button">设 B 点</button>
+            <button id="clearRepeatButton" class="ghost-button" type="button">取消</button>
+          </div>
+        </section>
 
         <div class="video-card">
           <video id="videoPlayer" controls preload="metadata"></video>
@@ -57,7 +77,7 @@
 
         <div class="status-grid">
           <div class="status-item">
-            <span class="status-label">视频</span>
+            <span class="status-label">媒体</span>
             <strong id="videoSourceLabel">未加载</strong>
           </div>
           <div class="status-item">
@@ -75,6 +95,10 @@
           <div class="status-item">
             <span class="status-label">VTT 字幕</span>
             <strong id="subtitleTrackLabel">未生成</strong>
+          </div>
+          <div class="status-item">
+            <span class="status-label">重复区间</span>
+            <strong id="repeatStatusLabel">未启用</strong>
           </div>
         </div>
 

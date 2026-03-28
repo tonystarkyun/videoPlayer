@@ -10,13 +10,21 @@ from pathlib import Path
 class SubtitlePlayerHandler(SimpleHTTPRequestHandler):
     extensions_map = {
         **SimpleHTTPRequestHandler.extensions_map,
+        ".aac": "audio/aac",
         ".css": "text/css; charset=utf-8",
+        ".flac": "audio/flac",
         ".html": "text/html; charset=utf-8",
         ".js": "text/javascript; charset=utf-8",
         ".json": "application/json; charset=utf-8",
+        ".m4a": "audio/mp4",
         ".md": "text/markdown; charset=utf-8",
         ".mjs": "text/javascript; charset=utf-8",
+        ".mp3": "audio/mpeg",
+        ".oga": "audio/ogg",
+        ".ogg": "audio/ogg",
         ".vtt": "text/vtt; charset=utf-8",
+        ".wav": "audio/wav",
+        ".weba": "audio/webm",
     }
 
     range = None
@@ -139,7 +147,8 @@ def main() -> None:
     handler = partial(SubtitlePlayerHandler, directory=str(root))
     server = ThreadingHTTPServer(("127.0.0.1", args.port), handler)
 
-    print(f"Serving subtitle player at http://127.0.0.1:{args.port}/subtitle-player/index.html")
+    app_name = Path(__file__).resolve().parent.name
+    print(f"Serving subtitle player at http://127.0.0.1:{args.port}/{app_name}/index.html")
     print(f"Root directory: {root}")
 
     try:

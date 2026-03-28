@@ -14,16 +14,28 @@ const VIDEO_EXTENSIONS = new Set([
   ".ogv",
   ".webm",
 ]);
+const AUDIO_EXTENSIONS = new Set([
+  ".aac",
+  ".flac",
+  ".m4a",
+  ".mp3",
+  ".oga",
+  ".ogg",
+  ".wav",
+  ".weba",
+]);
 const DEFAULT_TITLE = "字幕时间轴播放器";
 
 const projectTitle = document.querySelector("#projectTitle");
 const videoPlayer = document.querySelector("#videoPlayer");
+const videoCard = document.querySelector(".video-card");
 const statusMessage = document.querySelector("#statusMessage");
 const videoSourceLabel = document.querySelector("#videoSourceLabel");
 const markdownSourceLabel = document.querySelector("#markdownSourceLabel");
 const segmentCountLabel = document.querySelector("#segmentCountLabel");
 const currentTimeLabel = document.querySelector("#currentTimeLabel");
 const subtitleTrackLabel = document.querySelector("#subtitleTrackLabel");
+const repeatStatusLabel = document.querySelector("#repeatStatusLabel");
 const searchInput = document.querySelector("#searchInput");
 const searchSummary = document.querySelector("#searchSummary");
 const segmentList = document.querySelector("#segmentList");
@@ -40,6 +52,12 @@ const subtitleVisibleInput = document.querySelector("#subtitleVisibleInput");
 const previousSegmentButton = document.querySelector("#previousSegmentButton");
 const nextSegmentButton = document.querySelector("#nextSegmentButton");
 const downloadVttLink = document.querySelector("#downloadVttLink");
+const toggleRepeatButton = document.querySelector("#toggleRepeatButton");
+const repeatPanel = document.querySelector("#repeatPanel");
+const repeatSummary = document.querySelector("#repeatSummary");
+const setRepeatStartButton = document.querySelector("#setRepeatStartButton");
+const setRepeatEndButton = document.querySelector("#setRepeatEndButton");
+const clearRepeatButton = document.querySelector("#clearRepeatButton");
 const openLibraryButton = document.querySelector("#openLibraryButton");
 const closeLibraryButton = document.querySelector("#closeLibraryButton");
 const libraryModal = document.querySelector("#libraryModal");
@@ -47,11 +65,16 @@ const libraryModal = document.querySelector("#libraryModal");
 const state = {
   activeIndex: -1,
   currentMediaKey: null,
+  currentMediaKind: "video",
   defaultTitle: DEFAULT_TITLE,
   isLibraryModalOpen: false,
+  isRepeatActive: false,
+  isRepeatPanelOpen: false,
   mediaElements: new Map(),
   mediaLibrary: [],
   pendingSeek: null,
+  repeatEnd: null,
+  repeatStart: null,
   scrollAnimationFrame: 0,
   segmentElements: new Map(),
   segments: [],
@@ -100,6 +123,127 @@ async function checkUrlExists(url) {
   }
 }
 
+function getExtensionFromValue(value) {
+  const sanitizedValue = value.split(/[?#]/, 1)[0];
+  const extensionMatch = /\.[^.\\/]+$/.exec(sanitizedValue);
+  return extensionMatch ? extensionMatch[0].toLowerCase() : "";
+}
+
+function detectMediaKind(fileLike, extension = "") {
+  const normalizedExtension = extension || getExtensionFromValue(fileLike?.name || String(fileLike || ""));
+  const mimeType = typeof fileLike?.type === "string" ? fileLike.type : "";
+
+  if (mimeType.startsWith("video/") || VIDEO_EXTENSIONS.has(normalizedExtension)) {
+    return "video";
+  }
+
+  if (mimeType.startsWith("audio/") || AUDIO_EXTENSIONS.has(normalizedExtension)) {
+    return "audio";
+  }
+
+  return null;
+}
+
+function hasRepeatRange() {
+  return Number.isFinite(state.repeatStart) && Number.isFinite(state.repeatEnd);
+}
+
+function formatRepeatRangeSummary() {
+  if (!Number.isFinite(state.repeatStart) && !Number.isFinite(state.repeatEnd)) {
+    return "未设置 A 点和 B 点";
+  }
+
+  if (Number.isFinite(state.repeatStart) && !Number.isFinite(state.repeatEnd)) {
+    return `A 点 ${formatSeconds(state.repeatStart)}，等待设置 B 点`;
+  }
+
+  if (!Number.isFinite(state.repeatStart) && Number.isFinite(state.repeatEnd)) {
+    return `B 点 ${formatSeconds(state.repeatEnd)}，等待设置 A 点`;
+  }
+
+  const mode = state.isRepeatActive ? "循环中" : "已暂停";
+  return `A ${formatSeconds(state.repeatStart)} · B ${formatSeconds(state.repeatEnd)} · ${mode}`;
+}
+
+function renderRepeatState() {
+  if (repeatSummary) {
+    repeatSummary.textContent = formatRepeatRangeSummary();
+  }
+
+  if (repeatStatusLabel) {
+    repeatStatusLabel.textContent = hasRepeatRange()
+      ? `${formatSeconds(state.repeatStart)} - ${formatSeconds(state.repeatEnd)}`
+      : "未启用";
+  }
+
+  if (clearRepeatButton) {
+    clearRepeatButton.disabled = !Number.isFinite(state.repeatStart) && !Number.isFinite(state.repeatEnd);
+  }
+
+  if (setRepeatEndButton) {
+    setRepeatEndButton.disabled = !Number.isFinite(state.repeatStart);
+  }
+}
+
+function toggleRepeatPanel(forceOpen) {
+  const nextOpen = typeof forceOpen === "boolean" ? forceOpen : !state.isRepeatPanelOpen;
+  state.isRepeatPanelOpen = nextOpen;
+
+  if (repeatPanel) {
+    repeatPanel.hidden = !nextOpen;
+  }
+
+  if (toggleRepeatButton) {
+    toggleRepeatButton.setAttribute("aria-expanded", String(nextOpen));
+  }
+}
+
+function clearRepeatRange({ silent = false } = {}) {
+  state.isRepeatActive = false;
+  state.repeatStart = null;
+  state.repeatEnd = null;
+  renderRepeatState();
+
+  if (!silent) {
+    setStatus("已取消固定区间重复播放。");
+  }
+}
+
+function setPlayerPresentation(kind) {
+  state.currentMediaKind = kind === "audio" ? "audio" : "video";
+  videoCard?.classList.toggle("is-audio", state.currentMediaKind === "audio");
+}
+
+function syncRepeatPlayback() {
+  if (!state.isRepeatActive || !hasRepeatRange()) {
+    return false;
+  }
+
+  const epsilon = 0.08;
+  if (videoPlayer.currentTime < state.repeatStart - epsilon) {
+    videoPlayer.currentTime = state.repeatStart;
+    currentTimeLabel.textContent = formatSeconds(state.repeatStart);
+    return true;
+  }
+
+  if (videoPlayer.currentTime >= state.repeatEnd - epsilon) {
+    beginPendingSeek(state.activeIndex, state.repeatStart);
+    if (typeof videoPlayer.fastSeek === "function") {
+      videoPlayer.fastSeek(state.repeatStart);
+    } else {
+      videoPlayer.currentTime = state.repeatStart;
+    }
+
+    if (videoPlayer.paused) {
+      videoPlayer.play().catch(() => {});
+    }
+    currentTimeLabel.textContent = formatSeconds(state.repeatStart);
+    return true;
+  }
+
+  return false;
+}
+
 function updateSegmentCountLabel(visibleCount = state.segments.length) {
   segmentCountLabel.textContent = `${visibleCount} / ${state.segments.length}`;
 }
@@ -143,6 +287,9 @@ function resetLoadedProject() {
   cleanupVideoObjectUrl();
   cleanupSubtitleTrack();
   clearPendingSeek();
+  clearRepeatRange({ silent: true });
+  toggleRepeatPanel(false);
+  setPlayerPresentation("video");
 
   videoPlayer.pause();
   videoPlayer.removeAttribute("src");
@@ -165,6 +312,7 @@ function resetLoadedProject() {
   currentTimeLabel.textContent = "00:00:00";
   updateSegmentCountLabel(0);
   renderMediaLibrary();
+  renderRepeatState();
 }
 
 function enterIdleState(message) {
@@ -385,6 +533,53 @@ function closeLibraryModal({ restoreFocus = true } = {}) {
   }
 }
 
+function captureRepeatStart() {
+  if (!Number.isFinite(videoPlayer.currentTime)) {
+    setStatus("当前媒体还没有可用的播放时间，无法设置 A 点。", true);
+    return;
+  }
+
+  state.repeatStart = videoPlayer.currentTime;
+  state.isRepeatActive = false;
+
+  if (Number.isFinite(state.repeatEnd) && state.repeatEnd <= state.repeatStart + 0.05) {
+    state.repeatEnd = null;
+  }
+
+  renderRepeatState();
+  setStatus(`已记录 A 点：${formatSeconds(state.repeatStart)}。`);
+}
+
+function captureRepeatEnd() {
+  if (!Number.isFinite(state.repeatStart)) {
+    setStatus("请先设置 A 点，再设置 B 点。", true);
+    return;
+  }
+
+  if (!Number.isFinite(videoPlayer.currentTime)) {
+    setStatus("当前媒体还没有可用的播放时间，无法设置 B 点。", true);
+    return;
+  }
+
+  if (videoPlayer.currentTime <= state.repeatStart + 0.05) {
+    setStatus("B 点必须晚于 A 点。", true);
+    return;
+  }
+
+  state.repeatEnd = videoPlayer.currentTime;
+  state.isRepeatActive = true;
+  renderRepeatState();
+
+  if (videoPlayer.currentTime > state.repeatEnd || videoPlayer.currentTime < state.repeatStart) {
+    videoPlayer.currentTime = state.repeatStart;
+  }
+
+  videoPlayer.play().catch(() => {});
+  setStatus(
+    `已开启固定区间重复播放：${formatSeconds(state.repeatStart)} - ${formatSeconds(state.repeatEnd)}。`,
+  );
+}
+
 function renderMediaLibrary() {
   mediaList.innerHTML = "";
   state.mediaElements.clear();
@@ -543,9 +738,11 @@ async function loadMarkdownTextFromUrl(path) {
   return response.text();
 }
 
-function setVideoSource(url, displayName, { isObjectUrl = false } = {}) {
+function setVideoSource(url, displayName, { isObjectUrl = false, mediaKind = "video" } = {}) {
   cleanupVideoObjectUrl();
   clearPendingSeek();
+  clearRepeatRange({ silent: true });
+  setPlayerPresentation(mediaKind);
 
   if (isObjectUrl) {
     state.videoObjectUrl = url;
@@ -559,8 +756,8 @@ function setVideoSource(url, displayName, { isObjectUrl = false } = {}) {
   syncSubtitleVisibility();
 }
 
-function isVideoFile(file, extension) {
-  return file.type.startsWith("video/") || VIDEO_EXTENSIONS.has(extension);
+function isPlayableMediaFile(file, extension) {
+  return detectMediaKind(file, extension) !== null;
 }
 
 function getFileDescriptor(file) {
@@ -586,7 +783,7 @@ function buildMediaLibraryFromFolder(files) {
   const entries = new Map();
   let folderName = "";
   let unmatchedMarkdownCount = 0;
-  let unmatchedVideoCount = 0;
+  let unmatchedMediaCount = 0;
 
   for (const file of files) {
     const descriptor = getFileDescriptor(file);
@@ -598,15 +795,17 @@ function buildMediaLibraryFromFolder(files) {
     const entry = entries.get(key) || {
       key,
       markdownFile: null,
+      mediaFile: null,
+      mediaKind: null,
       relativeDir: descriptor.relativeDir,
       title: descriptor.stem,
-      videoFile: null,
     };
 
     if (descriptor.extension === ".md") {
       entry.markdownFile = file;
-    } else if (isVideoFile(file, descriptor.extension)) {
-      entry.videoFile = file;
+    } else if (isPlayableMediaFile(file, descriptor.extension)) {
+      entry.mediaFile = file;
+      entry.mediaKind = detectMediaKind(file, descriptor.extension);
     }
 
     entries.set(key, entry);
@@ -615,19 +814,19 @@ function buildMediaLibraryFromFolder(files) {
   const items = [];
 
   for (const entry of entries.values()) {
-    if (entry.videoFile && entry.markdownFile) {
+    if (entry.mediaFile && entry.markdownFile) {
       items.push({
         ...entry,
         meta: entry.relativeDir
-          ? `${entry.relativeDir} · ${entry.videoFile.name}`
-          : `${entry.videoFile.name}`,
+          ? `${entry.relativeDir} · ${entry.mediaFile.name}`
+          : `${entry.mediaFile.name}`,
         sourceType: "local",
       });
       continue;
     }
 
-    if (entry.videoFile) {
-      unmatchedVideoCount += 1;
+    if (entry.mediaFile) {
+      unmatchedMediaCount += 1;
     } else if (entry.markdownFile) {
       unmatchedMarkdownCount += 1;
     }
@@ -646,7 +845,7 @@ function buildMediaLibraryFromFolder(files) {
     folderName: folderName || "所选文件夹",
     items,
     unmatchedMarkdownCount,
-    unmatchedVideoCount,
+    unmatchedMediaCount,
   };
 }
 
@@ -655,8 +854,11 @@ async function loadMediaEntry(entry) {
   setTitle(entry.title);
 
   if (entry.sourceType === "local") {
-    const objectUrl = URL.createObjectURL(entry.videoFile);
-    setVideoSource(objectUrl, entry.videoFile.name, { isObjectUrl: true });
+    const objectUrl = URL.createObjectURL(entry.mediaFile);
+    setVideoSource(objectUrl, entry.mediaFile.name, {
+      isObjectUrl: true,
+      mediaKind: entry.mediaKind,
+    });
 
     if (!entry.markdownText) {
       entry.markdownText = await entry.markdownFile.text();
@@ -666,7 +868,9 @@ async function loadMediaEntry(entry) {
     return;
   }
 
-  setVideoSource(entry.videoUrl, basename(entry.videoUrl));
+  setVideoSource(entry.mediaUrl, basename(entry.mediaUrl), {
+    mediaKind: entry.mediaKind,
+  });
   const markdown = await loadMarkdownTextFromUrl(entry.markdownUrl);
   parseAndRenderMarkdown(markdown, basename(entry.markdownUrl), entry.title);
 }
@@ -685,7 +889,9 @@ async function loadDefaultProject() {
     }
 
     const config = await response.json();
-    if (!hasConfiguredPath(config.videoPath) || !hasConfiguredPath(config.markdownPath)) {
+    const configuredMediaPath = config.mediaPath || config.videoPath || config.audioPath;
+
+    if (!hasConfiguredPath(configuredMediaPath) || !hasConfiguredPath(config.markdownPath)) {
       enterIdleState("默认项目未配置完整，请选择一个包含同名视频和 .md 的文件夹。");
       return;
     }
@@ -694,17 +900,18 @@ async function loadDefaultProject() {
       key: "__default__",
       markdownUrl: toAbsoluteUrl(config.markdownPath),
       meta: "默认项目",
+      mediaKind: detectMediaKind({ name: configuredMediaPath }, getExtensionFromValue(configuredMediaPath)) || "video",
       sourceType: "remote",
-      title: config.title || basename(config.videoPath),
-      videoUrl: toAbsoluteUrl(config.videoPath),
+      title: config.title || basename(configuredMediaPath),
+      mediaUrl: toAbsoluteUrl(configuredMediaPath),
     };
 
-    const [videoExists, markdownExists] = await Promise.all([
-      checkUrlExists(entry.videoUrl),
+    const [mediaExists, markdownExists] = await Promise.all([
+      checkUrlExists(entry.mediaUrl),
       checkUrlExists(entry.markdownUrl),
     ]);
 
-    if (!videoExists || !markdownExists) {
+    if (!mediaExists || !markdownExists) {
       enterIdleState("默认项目文件不存在，请选择一个包含同名视频和 .md 的文件夹。");
       return;
     }
@@ -730,7 +937,7 @@ async function loadFolderLibrary(fileList) {
     setLibrarySummary(`${scanResult.folderName} · 未找到可播放项目`);
     renderMediaLibrary();
     setStatus(
-      `在 ${scanResult.folderName} 中没有找到同名的 .mp4 和 .md 配对。`,
+      `在 ${scanResult.folderName} 中没有找到同名的媒体文件和 .md 配对。`,
       true,
     );
     return;
@@ -741,15 +948,32 @@ async function loadFolderLibrary(fileList) {
   await loadMediaEntry(scanResult.items[0]);
 
   const notes = [];
-  if (scanResult.unmatchedVideoCount > 0) {
-    notes.push(`忽略 ${scanResult.unmatchedVideoCount} 个没有字幕 Markdown 的视频`);
+  if (scanResult.unmatchedMediaCount > 0) {
+    notes.push(`忽略 ${scanResult.unmatchedMediaCount} 个没有字幕 Markdown 的音视频文件`);
   }
   if (scanResult.unmatchedMarkdownCount > 0) {
-    notes.push(`忽略 ${scanResult.unmatchedMarkdownCount} 个没有对应视频的 Markdown`);
+    notes.push(`忽略 ${scanResult.unmatchedMarkdownCount} 个没有对应音视频文件的 Markdown`);
   }
 
   const suffix = notes.length > 0 ? `，${notes.join("，")}` : "";
   setStatus(`已从 ${scanResult.folderName} 加载 ${scanResult.items.length} 个项目${suffix}。`);
+}
+
+function keepPlaybackWithinRepeatRange() {
+  if (!state.isRepeatActive || !hasRepeatRange()) {
+    return false;
+  }
+
+  if (videoPlayer.currentTime < state.repeatStart || videoPlayer.currentTime > state.repeatEnd) {
+    if (typeof videoPlayer.fastSeek === "function") {
+      videoPlayer.fastSeek(state.repeatStart);
+    } else {
+      videoPlayer.currentTime = state.repeatStart;
+    }
+    return true;
+  }
+
+  return false;
 }
 
 function isEditableTarget(target) {
@@ -812,11 +1036,26 @@ function bindTimelineEvents() {
 
   subtitleVisibleInput.addEventListener("change", syncSubtitleVisibility);
   searchInput.addEventListener("input", applySearchFilter);
+  toggleRepeatButton?.addEventListener("click", () => {
+    toggleRepeatPanel();
+  });
+  setRepeatStartButton?.addEventListener("click", captureRepeatStart);
+  setRepeatEndButton?.addEventListener("click", captureRepeatEnd);
+  clearRepeatButton?.addEventListener("click", () => {
+    clearRepeatRange();
+  });
 
   window.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && state.isLibraryModalOpen) {
       event.preventDefault();
       closeLibraryModal();
+      return;
+    }
+
+    if (event.key === "Escape" && state.isRepeatPanelOpen) {
+      event.preventDefault();
+      toggleRepeatPanel(false);
+      toggleRepeatButton?.focus();
       return;
     }
 
@@ -840,15 +1079,30 @@ function bindTimelineEvents() {
   });
 
   videoPlayer.addEventListener("timeupdate", () => {
+    if (syncRepeatPlayback()) {
+      return;
+    }
     updateTimeDisplay();
     syncActiveSegment();
   });
 
-  videoPlayer.addEventListener("seeked", syncActiveSegment);
+  videoPlayer.addEventListener("seeked", () => {
+    keepPlaybackWithinRepeatRange();
+    syncActiveSegment();
+  });
   videoPlayer.addEventListener("loadedmetadata", () => {
     updateTimeDisplay();
+    keepPlaybackWithinRepeatRange();
     syncActiveSegment();
     syncSubtitleVisibility();
+  });
+  videoPlayer.addEventListener("ended", () => {
+    if (!state.isRepeatActive || !hasRepeatRange()) {
+      return;
+    }
+
+    videoPlayer.currentTime = state.repeatStart;
+    videoPlayer.play().catch(() => {});
   });
 }
 
@@ -897,6 +1151,8 @@ function initialize() {
   bindTimelineEvents();
   bindLibraryModalEvents();
   bindPickerEvents();
+  toggleRepeatPanel(false);
+  renderRepeatState();
   currentTimeLabel.textContent = "00:00:00";
   updateSegmentCountLabel(0);
   setDownloadLinkEnabled(false);
