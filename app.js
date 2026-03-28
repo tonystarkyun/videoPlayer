@@ -14,6 +14,7 @@ const VIDEO_EXTENSIONS = new Set([
   ".ogv",
   ".webm",
 ]);
+const DEFAULT_TITLE = "字幕时间轴播放器";
 
 const projectTitle = document.querySelector("#projectTitle");
 const videoPlayer = document.querySelector("#videoPlayer");
@@ -42,7 +43,7 @@ const downloadVttLink = document.querySelector("#downloadVttLink");
 const state = {
   activeIndex: -1,
   currentMediaKey: null,
-  defaultTitle: "字幕时间轴播放器",
+  defaultTitle: DEFAULT_TITLE,
   mediaElements: new Map(),
   mediaLibrary: [],
   pendingSeek: null,
@@ -75,6 +76,23 @@ function buildVttFileName(displayName) {
 
 function toAbsoluteUrl(relativePath) {
   return new URL(relativePath, window.location.href).toString();
+}
+
+function hasConfiguredPath(value) {
+  return typeof value === "string" && value.trim() !== "";
+}
+
+async function checkUrlExists(url) {
+  try {
+    const response = await fetch(url, {
+      cache: "no-store",
+      method: "HEAD",
+    });
+
+    return response.ok;
+  } catch {
+    return false;
+  }
 }
 
 function updateSegmentCountLabel(visibleCount = state.segments.length) {
@@ -113,6 +131,43 @@ function cleanupSubtitleTrack() {
 
   subtitleTrackLabel.textContent = "未生成";
   setDownloadLinkEnabled(false);
+}
+
+function resetLoadedProject() {
+  cancelAnimationFrame(state.scrollAnimationFrame);
+  cleanupVideoObjectUrl();
+  cleanupSubtitleTrack();
+  clearPendingSeek();
+
+  videoPlayer.pause();
+  videoPlayer.removeAttribute("src");
+  videoPlayer.load();
+
+  state.activeIndex = -1;
+  state.currentMediaKey = null;
+  state.mediaLibrary = [];
+  state.segments = [];
+  state.segmentElements.clear();
+  state.mediaElements.clear();
+
+  mediaList.innerHTML = "";
+  segmentList.innerHTML = "";
+  segmentList.scrollTop = 0;
+  searchInput.value = "";
+  searchSummary.textContent = "显示全部片段";
+  videoSourceLabel.textContent = "未加载";
+  markdownSourceLabel.textContent = "未加载";
+  currentTimeLabel.textContent = "00:00:00";
+  updateSegmentCountLabel(0);
+  renderMediaLibrary();
+}
+
+function enterIdleState(message) {
+  state.defaultTitle = DEFAULT_TITLE;
+  resetLoadedProject();
+  setLibrarySummary("当前未加载默认项目");
+  setTitle(state.defaultTitle);
+  setStatus(message);
 }
 
 function syncSubtitleVisibility() {
@@ -565,12 +620,16 @@ async function loadDefaultProject() {
     });
 
     if (!response.ok) {
-      throw new Error(
-        `读取默认配置失败: ${response.status} ${response.statusText}`,
-      );
+      enterIdleState("没有可用的默认项目，请选择一个包含同名视频和 .md 的文件夹。");
+      return;
     }
 
     const config = await response.json();
+    if (!hasConfiguredPath(config.videoPath) || !hasConfiguredPath(config.markdownPath)) {
+      enterIdleState("默认项目未配置完整，请选择一个包含同名视频和 .md 的文件夹。");
+      return;
+    }
+
     const entry = {
       key: "__default__",
       markdownUrl: toAbsoluteUrl(config.markdownPath),
@@ -579,6 +638,16 @@ async function loadDefaultProject() {
       title: config.title || basename(config.videoPath),
       videoUrl: toAbsoluteUrl(config.videoPath),
     };
+
+    const [videoExists, markdownExists] = await Promise.all([
+      checkUrlExists(entry.videoUrl),
+      checkUrlExists(entry.markdownUrl),
+    ]);
+
+    if (!videoExists || !markdownExists) {
+      enterIdleState("默认项目文件不存在，请选择一个包含同名视频和 .md 的文件夹。");
+      return;
+    }
 
     state.defaultTitle = entry.title;
     state.mediaLibrary = [entry];
