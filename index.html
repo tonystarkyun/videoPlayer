@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>字幕时间轴播放器</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="video-panel">
+        <header class="panel-header">
+          <div>
+            <p class="eyebrow">Local Timeline Player</p>
+            <h1 id="projectTitle">字幕时间轴播放器</h1>
+          </div>
+          <button id="reloadDefaultButton" class="ghost-button" type="button">加载默认素材</button>
+        </header>
+
+        <div class="picker-row">
+          <label class="picker picker-folder">
+            <span>选择本地文件夹</span>
+            <input id="folderInput" type="file" webkitdirectory multiple>
+          </label>
+        </div>
+
+        <div class="action-row">
+          <button id="previousSegmentButton" class="ghost-button" type="button">上一条 [</button>
+          <button id="nextSegmentButton" class="ghost-button" type="button">下一条 ]</button>
+          <label class="toggle-chip" for="subtitleVisibleInput">
+            <input id="subtitleVisibleInput" type="checkbox">
+            <span>显示视频字幕</span>
+          </label>
+          <a id="downloadVttLink" class="ghost-button ghost-link is-disabled" aria-disabled="true">下载 VTT</a>
+        </div>
+
+        <p class="shortcut-hint">快捷键：`[` 跳上一条，`]` 跳下一条</p>
+
+        <div class="video-card">
+          <video id="videoPlayer" controls preload="metadata"></video>
+        </div>
+
+        <section class="library-panel">
+          <header class="library-header">
+            <div>
+              <p class="eyebrow">Media Library</p>
+              <h3>视频列表</h3>
+            </div>
+            <p id="librarySummary" class="library-summary">当前为默认项目</p>
+          </header>
+
+          <ul id="mediaList" class="media-list"></ul>
+          <p id="mediaEmptyState" class="media-empty">选择一个本地文件夹后，这里会显示匹配成功的视频和字幕列表。</p>
+        </section>
+
+        <div class="status-grid">
+          <div class="status-item">
+            <span class="status-label">视频</span>
+            <strong id="videoSourceLabel">未加载</strong>
+          </div>
+          <div class="status-item">
+            <span class="status-label">字幕源</span>
+            <strong id="markdownSourceLabel">未加载</strong>
+          </div>
+          <div class="status-item">
+            <span class="status-label">片段数</span>
+            <strong id="segmentCountLabel">0</strong>
+          </div>
+          <div class="status-item">
+            <span class="status-label">当前时间</span>
+            <strong id="currentTimeLabel">00:00:00</strong>
+          </div>
+          <div class="status-item">
+            <span class="status-label">VTT 字幕</span>
+            <strong id="subtitleTrackLabel">未生成</strong>
+          </div>
+        </div>
+
+        <p id="statusMessage" class="status-message">正在读取默认配置…</p>
+      </section>
+
+      <aside class="timeline-panel">
+        <header class="panel-header timeline-header">
+          <div>
+            <p class="eyebrow">Segments</p>
+            <h2>时间轴与字幕</h2>
+          </div>
+          <label class="follow-toggle">
+            <input id="followPlaybackInput" type="checkbox" checked>
+            <span>跟随播放滚动</span>
+          </label>
+        </header>
+
+        <div class="search-row">
+          <input id="searchInput" type="search" placeholder="搜索字幕内容">
+          <p id="searchSummary">显示全部片段</p>
+        </div>
+
+        <ol id="segmentList" class="segment-list"></ol>
+      </aside>
+    </main>
+
+    <template id="segmentItemTemplate">
+      <li class="segment-item">
+        <button class="segment-button" type="button">
+          <span class="segment-time"></span>
+          <span class="segment-text"></span>
+        </button>
+      </li>
+    </template>
+
+    <template id="mediaItemTemplate">
+      <li class="media-item">
+        <button class="media-button" type="button">
+          <span class="media-title"></span>
+          <span class="media-meta"></span>
+        </button>
+      </li>
+    </template>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
