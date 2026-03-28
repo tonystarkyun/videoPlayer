@@ -33,13 +33,6 @@
           </label>
           <a id="downloadVttLink" class="ghost-button ghost-link is-disabled" aria-disabled="true">下载 VTT</a>
           <button
-            id="toggleRepeatButton"
-            class="ghost-button"
-            type="button"
-            aria-controls="repeatPanel"
-            aria-expanded="false"
-          >重复</button>
-          <button
             id="openLibraryButton"
             class="ghost-button"
             type="button"
@@ -47,22 +40,18 @@
             aria-controls="libraryModal"
             aria-expanded="false"
           >视频列表</button>
+          <button id="setRepeatStartButton" class="ghost-button repeat-point-button" type="button">
+            <span>设 A 点</span>
+            <span id="repeatStartValue" class="repeat-point-meta">未设置</span>
+          </button>
+          <button id="setRepeatEndButton" class="ghost-button repeat-point-button" type="button">
+            <span>设 B 点</span>
+            <span id="repeatEndValue" class="repeat-point-meta">未设置</span>
+          </button>
+          <button id="clearRepeatButton" class="ghost-button" type="button">取消</button>
         </div>
 
         <p class="shortcut-hint">快捷键：`[` 跳上一条，`]` 跳下一条</p>
-
-        <section id="repeatPanel" class="repeat-panel" hidden>
-          <div class="repeat-panel-copy">
-            <p class="eyebrow">A-B Repeat</p>
-            <p id="repeatSummary" class="repeat-summary">未设置 A 点和 B 点</p>
-          </div>
-
-          <div class="repeat-actions">
-            <button id="setRepeatStartButton" class="ghost-button" type="button">设 A 点</button>
-            <button id="setRepeatEndButton" class="ghost-button" type="button">设 B 点</button>
-            <button id="clearRepeatButton" class="ghost-button" type="button">取消</button>
-          </div>
-        </section>
 
         <div class="video-card">
           <video id="videoPlayer" controls preload="metadata"></video>

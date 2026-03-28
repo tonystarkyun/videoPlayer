@@ -52,11 +52,10 @@ const subtitleVisibleInput = document.querySelector("#subtitleVisibleInput");
 const previousSegmentButton = document.querySelector("#previousSegmentButton");
 const nextSegmentButton = document.querySelector("#nextSegmentButton");
 const downloadVttLink = document.querySelector("#downloadVttLink");
-const toggleRepeatButton = document.querySelector("#toggleRepeatButton");
-const repeatPanel = document.querySelector("#repeatPanel");
-const repeatSummary = document.querySelector("#repeatSummary");
 const setRepeatStartButton = document.querySelector("#setRepeatStartButton");
 const setRepeatEndButton = document.querySelector("#setRepeatEndButton");
+const repeatStartValue = document.querySelector("#repeatStartValue");
+const repeatEndValue = document.querySelector("#repeatEndValue");
 const clearRepeatButton = document.querySelector("#clearRepeatButton");
 const openLibraryButton = document.querySelector("#openLibraryButton");
 const closeLibraryButton = document.querySelector("#closeLibraryButton");
@@ -69,7 +68,6 @@ const state = {
   defaultTitle: DEFAULT_TITLE,
   isLibraryModalOpen: false,
   isRepeatActive: false,
-  isRepeatPanelOpen: false,
   mediaElements: new Map(),
   mediaLibrary: [],
   pendingSeek: null,
@@ -148,32 +146,23 @@ function hasRepeatRange() {
   return Number.isFinite(state.repeatStart) && Number.isFinite(state.repeatEnd);
 }
 
-function formatRepeatRangeSummary() {
-  if (!Number.isFinite(state.repeatStart) && !Number.isFinite(state.repeatEnd)) {
-    return "未设置 A 点和 B 点";
-  }
-
-  if (Number.isFinite(state.repeatStart) && !Number.isFinite(state.repeatEnd)) {
-    return `A 点 ${formatSeconds(state.repeatStart)}，等待设置 B 点`;
-  }
-
-  if (!Number.isFinite(state.repeatStart) && Number.isFinite(state.repeatEnd)) {
-    return `B 点 ${formatSeconds(state.repeatEnd)}，等待设置 A 点`;
-  }
-
-  const mode = state.isRepeatActive ? "循环中" : "已暂停";
-  return `A ${formatSeconds(state.repeatStart)} · B ${formatSeconds(state.repeatEnd)} · ${mode}`;
-}
-
 function renderRepeatState() {
-  if (repeatSummary) {
-    repeatSummary.textContent = formatRepeatRangeSummary();
-  }
-
   if (repeatStatusLabel) {
     repeatStatusLabel.textContent = hasRepeatRange()
       ? `${formatSeconds(state.repeatStart)} - ${formatSeconds(state.repeatEnd)}`
       : "未启用";
+  }
+
+  if (repeatStartValue) {
+    repeatStartValue.textContent = Number.isFinite(state.repeatStart)
+      ? formatSeconds(state.repeatStart)
+      : "未设置";
+  }
+
+  if (repeatEndValue) {
+    repeatEndValue.textContent = Number.isFinite(state.repeatEnd)
+      ? formatSeconds(state.repeatEnd)
+      : "未设置";
   }
 
   if (clearRepeatButton) {
@@ -182,19 +171,6 @@ function renderRepeatState() {
 
   if (setRepeatEndButton) {
     setRepeatEndButton.disabled = !Number.isFinite(state.repeatStart);
-  }
-}
-
-function toggleRepeatPanel(forceOpen) {
-  const nextOpen = typeof forceOpen === "boolean" ? forceOpen : !state.isRepeatPanelOpen;
-  state.isRepeatPanelOpen = nextOpen;
-
-  if (repeatPanel) {
-    repeatPanel.hidden = !nextOpen;
-  }
-
-  if (toggleRepeatButton) {
-    toggleRepeatButton.setAttribute("aria-expanded", String(nextOpen));
   }
 }
 
@@ -288,7 +264,6 @@ function resetLoadedProject() {
   cleanupSubtitleTrack();
   clearPendingSeek();
   clearRepeatRange({ silent: true });
-  toggleRepeatPanel(false);
   setPlayerPresentation("video");
 
   videoPlayer.pause();
@@ -1036,9 +1011,6 @@ function bindTimelineEvents() {
 
   subtitleVisibleInput.addEventListener("change", syncSubtitleVisibility);
   searchInput.addEventListener("input", applySearchFilter);
-  toggleRepeatButton?.addEventListener("click", () => {
-    toggleRepeatPanel();
-  });
   setRepeatStartButton?.addEventListener("click", captureRepeatStart);
   setRepeatEndButton?.addEventListener("click", captureRepeatEnd);
   clearRepeatButton?.addEventListener("click", () => {
@@ -1049,13 +1021,6 @@ function bindTimelineEvents() {
     if (event.key === "Escape" && state.isLibraryModalOpen) {
       event.preventDefault();
       closeLibraryModal();
-      return;
-    }
-
-    if (event.key === "Escape" && state.isRepeatPanelOpen) {
-      event.preventDefault();
-      toggleRepeatPanel(false);
-      toggleRepeatButton?.focus();
       return;
     }
 
@@ -1151,7 +1116,6 @@ function initialize() {
   bindTimelineEvents();
   bindLibraryModalEvents();
   bindPickerEvents();
-  toggleRepeatPanel(false);
   renderRepeatState();
   currentTimeLabel.textContent = "00:00:00";
   updateSegmentCountLabel(0);
