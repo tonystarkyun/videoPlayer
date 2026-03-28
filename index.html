@@ -32,6 +32,14 @@
             <span>显示视频字幕</span>
           </label>
           <a id="downloadVttLink" class="ghost-button ghost-link is-disabled" aria-disabled="true">下载 VTT</a>
+          <button
+            id="openLibraryButton"
+            class="ghost-button"
+            type="button"
+            aria-haspopup="dialog"
+            aria-controls="libraryModal"
+            aria-expanded="false"
+          >视频列表</button>
         </div>
 
         <p class="shortcut-hint">快捷键：`[` 跳上一条，`]` 跳下一条</p>
@@ -40,17 +48,11 @@
           <video id="videoPlayer" controls preload="metadata"></video>
         </div>
 
-        <section class="library-panel">
-          <header class="library-header">
-            <div>
-              <p class="eyebrow">Media Library</p>
-              <h3>视频列表</h3>
-            </div>
-            <p id="librarySummary" class="library-summary">当前为默认项目</p>
-          </header>
-
-          <ul id="mediaList" class="media-list"></ul>
-          <p id="mediaEmptyState" class="media-empty">选择一个本地文件夹后，这里会显示匹配成功的视频和字幕列表。</p>
+        <section class="library-bar" aria-label="media library summary">
+          <div class="library-bar-copy">
+            <p class="eyebrow">Media Library</p>
+            <p id="librarySummary" class="library-summary library-summary-inline">当前未加载默认项目</p>
+          </div>
         </section>
 
         <div class="status-grid">
@@ -99,6 +101,32 @@
         <ol id="segmentList" class="segment-list"></ol>
       </aside>
     </main>
+
+    <div id="libraryModal" class="modal-shell" hidden>
+      <div class="modal-backdrop" data-close-modal="true"></div>
+
+      <section
+        class="library-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="libraryModalTitle"
+      >
+        <header class="library-modal-header">
+          <div>
+            <p class="eyebrow">Media Library</p>
+            <h3 id="libraryModalTitle">视频列表</h3>
+          </div>
+
+          <div class="library-modal-actions">
+            <p id="modalLibrarySummary" class="library-summary library-summary-modal">当前未加载默认项目</p>
+            <button id="closeLibraryButton" class="ghost-button" type="button">关闭</button>
+          </div>
+        </header>
+
+        <ul id="mediaList" class="media-list media-list-modal"></ul>
+        <p id="mediaEmptyState" class="media-empty">选择一个本地文件夹后，这里会显示匹配成功的视频和字幕列表。</p>
+      </section>
+    </div>
 
     <template id="segmentItemTemplate">
       <li class="segment-item">

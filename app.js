@@ -32,6 +32,7 @@ const mediaList = document.querySelector("#mediaList");
 const mediaItemTemplate = document.querySelector("#mediaItemTemplate");
 const mediaEmptyState = document.querySelector("#mediaEmptyState");
 const librarySummary = document.querySelector("#librarySummary");
+const modalLibrarySummary = document.querySelector("#modalLibrarySummary");
 const folderInput = document.querySelector("#folderInput");
 const reloadDefaultButton = document.querySelector("#reloadDefaultButton");
 const followPlaybackInput = document.querySelector("#followPlaybackInput");
@@ -39,11 +40,15 @@ const subtitleVisibleInput = document.querySelector("#subtitleVisibleInput");
 const previousSegmentButton = document.querySelector("#previousSegmentButton");
 const nextSegmentButton = document.querySelector("#nextSegmentButton");
 const downloadVttLink = document.querySelector("#downloadVttLink");
+const openLibraryButton = document.querySelector("#openLibraryButton");
+const closeLibraryButton = document.querySelector("#closeLibraryButton");
+const libraryModal = document.querySelector("#libraryModal");
 
 const state = {
   activeIndex: -1,
   currentMediaKey: null,
   defaultTitle: DEFAULT_TITLE,
+  isLibraryModalOpen: false,
   mediaElements: new Map(),
   mediaLibrary: [],
   pendingSeek: null,
@@ -330,6 +335,54 @@ function updateMediaSelection(key) {
 
 function setLibrarySummary(text) {
   librarySummary.textContent = text;
+  if (modalLibrarySummary) {
+    modalLibrarySummary.textContent = text;
+  }
+}
+
+function focusLibraryModalTarget() {
+  const target =
+    mediaList.querySelector("[aria-current='true']") ||
+    mediaList.querySelector(".media-button") ||
+    closeLibraryButton;
+
+  if (!(target instanceof HTMLElement)) {
+    return;
+  }
+
+  target.focus({ preventScroll: true });
+  if (target !== closeLibraryButton) {
+    target.scrollIntoView({
+      block: "nearest",
+    });
+  }
+}
+
+function openLibraryModal() {
+  if (state.isLibraryModalOpen || !libraryModal) {
+    return;
+  }
+
+  state.isLibraryModalOpen = true;
+  libraryModal.hidden = false;
+  document.body.classList.add("has-modal");
+  openLibraryButton?.setAttribute("aria-expanded", "true");
+  requestAnimationFrame(focusLibraryModalTarget);
+}
+
+function closeLibraryModal({ restoreFocus = true } = {}) {
+  if (!state.isLibraryModalOpen || !libraryModal) {
+    return;
+  }
+
+  state.isLibraryModalOpen = false;
+  libraryModal.hidden = true;
+  document.body.classList.remove("has-modal");
+  openLibraryButton?.setAttribute("aria-expanded", "false");
+
+  if (restoreFocus) {
+    openLibraryButton?.focus();
+  }
 }
 
 function renderMediaLibrary() {
@@ -338,6 +391,9 @@ function renderMediaLibrary() {
 
   if (state.mediaLibrary.length === 0) {
     mediaEmptyState.hidden = false;
+    if (state.isLibraryModalOpen) {
+      requestAnimationFrame(focusLibraryModalTarget);
+    }
     return;
   }
 
@@ -363,6 +419,10 @@ function renderMediaLibrary() {
   }
 
   mediaList.appendChild(fragment);
+
+  if (state.isLibraryModalOpen) {
+    requestAnimationFrame(focusLibraryModalTarget);
+  }
 }
 
 function attachGeneratedSubtitleTrack(displayName) {
@@ -754,7 +814,17 @@ function bindTimelineEvents() {
   searchInput.addEventListener("input", applySearchFilter);
 
   window.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && state.isLibraryModalOpen) {
+      event.preventDefault();
+      closeLibraryModal();
+      return;
+    }
+
     if (event.altKey || event.ctrlKey || event.metaKey || isEditableTarget(event.target)) {
+      return;
+    }
+
+    if (state.isLibraryModalOpen) {
       return;
     }
 
@@ -782,6 +852,25 @@ function bindTimelineEvents() {
   });
 }
 
+function bindLibraryModalEvents() {
+  openLibraryButton?.addEventListener("click", () => {
+    openLibraryModal();
+  });
+
+  closeLibraryButton?.addEventListener("click", () => {
+    closeLibraryModal();
+  });
+
+  libraryModal?.addEventListener("click", (event) => {
+    const target = event.target instanceof Element ? event.target : null;
+    if (!target?.closest("[data-close-modal]")) {
+      return;
+    }
+
+    closeLibraryModal();
+  });
+}
+
 function bindPickerEvents() {
   folderInput.addEventListener("change", async (event) => {
     const files = event.target.files;
@@ -806,6 +895,7 @@ function bindPickerEvents() {
 function initialize() {
   subtitleVisibleInput.checked = false;
   bindTimelineEvents();
+  bindLibraryModalEvents();
   bindPickerEvents();
   currentTimeLabel.textContent = "00:00:00";
   updateSegmentCountLabel(0);
